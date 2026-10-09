@@ -60,6 +60,29 @@ function getTransporter() {
     port,
     secure: process.env.SMTP_SECURE === 'true' || port === 465,
     auth: { user, pass },
+    connectionTimeout: 7000,
+    greetingTimeout: 7000,
+    socketTimeout: 12000,
+  })
+}
+
+function sendMailWithTimeout(transporter, message) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      transporter.close()
+      reject(Object.assign(new Error('SMTP request timed out.'), { code: 'ETIMEDOUT' }))
+    }, 15000)
+
+    transporter.sendMail(message).then(
+      info => {
+        clearTimeout(timeout)
+        resolve(info)
+      },
+      error => {
+        clearTimeout(timeout)
+        reject(error)
+      },
+    )
   })
 }
 
@@ -258,7 +281,7 @@ async function sendBookingEmail(event) {
     }).format(new Date())
     const { text, html } = buildEmailContent({ formType, config, fields, rows, timestamp })
 
-    const info = await transporter.sendMail({
+    const info = await sendMailWithTimeout(transporter, {
       from,
       to,
       replyTo: email || undefined,
@@ -270,6 +293,9 @@ async function sendBookingEmail(event) {
     return json({ ok: true, messageId: info.messageId })
   } catch (error) {
     console.error('send-booking-email error', error)
+    if (error.code === 'ETIMEDOUT') {
+      return json({ error: 'Email server se response nahi mila. Please thodi der mein dobara try karein.' }, 504)
+    }
     return json({ error: 'Request process nahi ho saki. Please dobara try karein.' }, 500)
   }
 }

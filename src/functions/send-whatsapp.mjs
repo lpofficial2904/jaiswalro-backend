@@ -53,6 +53,7 @@ export default async (request) => {
     const apiVersion = process.env.WHATSAPP_API_VERSION || 'v23.0'
     const whatsappResponse = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneNumberId}/messages`, {
       method: 'POST',
+      signal: AbortSignal.timeout(12000),
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
@@ -71,7 +72,9 @@ export default async (request) => {
     return Response.json({ ok: true, messageId: whatsappResult.messages?.[0]?.id })
   } catch (error) {
     console.error('send-whatsapp error', error)
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      return Response.json({ error: 'WhatsApp server se response nahi mila. Please thodi der mein dobara try karein.' }, { status: 504 })
+    }
     return Response.json({ error: 'Request process nahi ho saki. Please dobara try karein.' }, { status: 500 })
   }
 }
-

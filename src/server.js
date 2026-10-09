@@ -6,6 +6,8 @@ const port = Number(process.env.PORT || 3001)
 const allowedOrigins = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'https://jaiswalro.services',
+  'https://www.jaiswalro.services',
   ...(process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean),
 ])
 const routes = new Map([
@@ -55,7 +57,7 @@ async function handleRequest(request, response) {
   response.setHeader('Vary', 'Origin')
   if (origin) response.setHeader('Access-Control-Allow-Origin', origin)
 
-  if (url.pathname === '/health') {
+  if (url.pathname === '/health' || url.pathname === '/api/health') {
     if (request.method !== 'GET') {
       response.setHeader('Allow', 'GET')
       return sendJson(response, 405, { error: 'Method not allowed.' })
@@ -83,6 +85,7 @@ async function handleRequest(request, response) {
     return sendJson(response, 415, { error: 'Content-Type must be application/json.' })
   }
 
+  
   try {
     const body = await readBody(request)
     let payload
