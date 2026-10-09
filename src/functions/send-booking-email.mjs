@@ -1,4 +1,6 @@
 import nodemailer from 'nodemailer'
+import { resolve4 } from 'node:dns/promises'
+import { isIP } from 'node:net'
 
 const jsonHeaders = {
   'Content-Type': 'application/json',
@@ -47,7 +49,7 @@ const brand = {
   address: '13/884, Deendayal Upadhyay Market, Malviya Nagar, Jaipur',
 }
 
-function getTransporter() {
+async function getTransporter() {
   const host = process.env.SMTP_HOST
   const port = Number(process.env.SMTP_PORT || 587)
   const user = process.env.SMTP_USER
@@ -55,11 +57,18 @@ function getTransporter() {
 
   if (!host || !user || !pass) return null
 
+  const isIpAddress = isIP(host) !== 0
+  const addresses = isIpAddress ? [host] : await resolve4(host)
+  if (!addresses.length) {
+    throw Object.assign(new Error(`No IPv4 address found for SMTP host ${host}.`), { code: 'EDNS' })
+  }
+
   return nodemailer.createTransport({
-    host,
+    host: addresses[0],
     port,
     secure: process.env.SMTP_SECURE === 'true' || port === 465,
     auth: { user, pass },
+    ...(isIpAddress ? {} : { tls: { servername: host } }),
     connectionTimeout: 7000,
     greetingTimeout: 7000,
     socketTimeout: 12000,
@@ -87,8 +96,47 @@ function sendMailWithTimeout(transporter, message) {
 }
 
 function getMissingEmailConfig() {
-  return ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_TO']
+  const required = process.env.RESEND_API_KEY
+    ? ['MAIL_FROM', 'MAIL_TO']
+    : ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_TO']
+
+  return required
     .filter(key => !clean(process.env[key]))
+}
+
+async function sendResendEmail({ apiKey, from, to, replyTo, subject, text, html }) {
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      reply_to: replyTo,
+      subject,
+      text,
+      html,
+    }),
+    signal: AbortSignal.timeout(12000),
+  })
+
+  let result = {}
+  try {
+    result = await response.json()
+  } catch {
+    // Preserve a bounded error if the email provider returns a non-JSON response.
+  }
+
+  if (!response.ok) {
+    throw Object.assign(new Error(`Resend API returned ${response.status}: ${clean(result.message)}`), {
+      code: 'ERESEND',
+      statusCode: response.status,
+    })
+  }
+
+  return { messageId: result.id }
 }
 
 function getFormMeta(formType, fields) {
@@ -265,11 +313,12 @@ async function sendBookingEmail(event) {
       return json({ error: 'Email service abhi configure nahi hai. Please call us.' }, 503)
     }
 
-    const transporter = getTransporter()
+    const resendApiKey = clean(process.env.RESEND_API_KEY)
+    const transporter = resendApiKey ? null : await getTransporter()
     const to = process.env.MAIL_TO
     const from = clean(process.env.MAIL_FROM) || `"Jaiswalro Website" <${process.env.SMTP_USER}>`
-    if (!transporter || !to || !from) {
-      console.error('Email transporter could not be created')
+    if ((!resendApiKey && !transporter) || !to || !from) {
+      console.error('Email delivery provider could not be configured')
       return json({ error: 'Email service abhi configure nahi hai. Please call us.' }, 503)
     }
 
@@ -281,20 +330,26 @@ async function sendBookingEmail(event) {
     }).format(new Date())
     const { text, html } = buildEmailContent({ formType, config, fields, rows, timestamp })
 
-    const info = await sendMailWithTimeout(transporter, {
+    const message = {
       from,
       to,
       replyTo: email || undefined,
       subject: `${config.subject} - ${name}`,
       text,
       html,
-    })
+    }
+    const info = resendApiKey
+      ? await sendResendEmail({ apiKey: resendApiKey, ...message })
+      : await sendMailWithTimeout(transporter, message)
 
     return json({ ok: true, messageId: info.messageId })
   } catch (error) {
     console.error('send-booking-email error', error)
-    if (error.code === 'ETIMEDOUT') {
+    if (error.code === 'ETIMEDOUT' || error.name === 'TimeoutError' || error.name === 'AbortError') {
       return json({ error: 'Email server se response nahi mila. Please thodi der mein dobara try karein.' }, 504)
+    }
+    if (error.code === 'ENETUNREACH' || error.code === 'ECONNECTION' || error.code === 'ESOCKET' || error.code === 'EDNS') {
+      return json({ error: 'Email server ka network connection available nahi hai. Please thodi der mein dobara try karein ya humein call karein.' }, 502)
     }
     return json({ error: 'Request process nahi ho saki. Please dobara try karein.' }, 500)
   }
