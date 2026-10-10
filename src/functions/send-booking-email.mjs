@@ -106,6 +106,20 @@ function getMissingEmailConfig() {
     .filter(key => !clean(process.env[key]))
 }
 
+export function getEmailConfigStatus() {
+  const resendConfigured = Boolean(clean(process.env.RESEND_API_KEY))
+  const smtpConfigured = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'].every(key => clean(process.env[key]))
+  const missingConfig = getMissingEmailConfig()
+
+  return {
+    ok: missingConfig.length === 0 && (!isRenderRuntime() || resendConfigured),
+    provider: resendConfigured ? 'resend' : smtpConfigured ? 'smtp' : 'none',
+    runtime: isRenderRuntime() ? 'render' : 'node',
+    missingConfig,
+    renderRequiresResend: isRenderRuntime() && !resendConfigured,
+  }
+}
+
 async function sendResendEmail({ apiKey, from, to, replyTo, subject, text, html }) {
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',

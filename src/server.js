@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { handler as sendBookingEmail } from './functions/send-booking-email.mjs'
+import { getEmailConfigStatus, handler as sendBookingEmail } from './functions/send-booking-email.mjs'
 import sendWhatsApp from './functions/send-whatsapp.mjs'
 
 const port = Number(process.env.PORT || 3001)
@@ -63,6 +63,14 @@ async function handleRequest(request, response) {
       return sendJson(response, 405, { error: 'Method not allowed.' })
     }
     return sendJson(response, 200, { ok: true })
+  }
+
+  if (url.pathname === '/api/email/status') {
+    if (request.method !== 'GET') {
+      response.setHeader('Allow', 'GET')
+      return sendJson(response, 405, { error: 'Method not allowed.' })
+    }
+    return sendJson(response, 200, getEmailConfigStatus())
   }
 
   const handler = routes.get(url.pathname)
