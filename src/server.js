@@ -6,6 +6,7 @@ const port = Number(process.env.PORT || 3001)
 const allowedOrigins = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'https://brilliant-sprinkles-167aa2.netlify.app',
   'https://jaiswalro.services',
   'https://www.jaiswalro.services',
   ...(process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean),

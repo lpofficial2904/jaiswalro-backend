@@ -43,4 +43,6 @@ free Render service:
 
 Both POST endpoints accept JSON with `formType` (`contact`, `product`, or
 `service`) and a `fields` object. Browser origins must be listed in
-`CORS_ORIGINS`, a comma-separated list of full origins.
+`CORS_ORIGINS`, a comma-separated list of full origins such as
+`https://brilliant-sprinkles-167aa2.netlify.app`, `https://jaiswalro.services`,
+and `https://www.jaiswalro.services`.
