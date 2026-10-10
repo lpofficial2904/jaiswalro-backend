@@ -1,5 +1,7 @@
 import nodemailer from 'nodemailer'
 import { lookup } from 'node:dns'
+import net from 'node:net'
+import tls from 'node:tls'
 
 const jsonHeaders = {
   'Content-Type': 'application/json',
@@ -52,6 +54,40 @@ function lookupIpv4(hostname, options, callback) {
   lookup(hostname, { ...options, family: 4 }, callback)
 }
 
+function createSmtpSocket({ host, port, secure }) {
+  return (_options, callback) => {
+    lookup(host, { family: 4 }, (lookupError, address) => {
+      if (lookupError) {
+        callback(lookupError)
+        return
+      }
+
+      const connectionOptions = {
+        host: address,
+        port,
+        family: 4,
+        servername: host,
+        timeout: 7000,
+      }
+      const connection = secure
+        ? tls.connect(connectionOptions)
+        : net.connect(connectionOptions)
+      let settled = false
+      const done = (error, socketInfo) => {
+        if (settled) return
+        settled = true
+        callback(error, socketInfo)
+      }
+
+      connection.once('timeout', () => {
+        connection.destroy(Object.assign(new Error('SMTP socket timed out.'), { code: 'ETIMEDOUT' }))
+      })
+      connection.once('error', error => done(error))
+      connection.once(secure ? 'secureConnect' : 'connect', () => done(null, { connection, secured: secure }))
+    })
+  }
+}
+
 async function getTransporter() {
   const host = process.env.SMTP_HOST
   const port = Number(process.env.SMTP_PORT || 587)
@@ -59,14 +95,16 @@ async function getTransporter() {
   const pass = process.env.SMTP_PASS
 
   if (!host || !user || !pass) return null
+  const secure = process.env.SMTP_SECURE === 'true' || port === 465
 
   return nodemailer.createTransport({
     host,
     port,
-    secure: process.env.SMTP_SECURE === 'true' || port === 465,
+    secure,
     auth: { user, pass },
     family: 4,
     lookup: lookupIpv4,
+    getSocket: createSmtpSocket({ host, port, secure }),
     connectionTimeout: 7000,
     greetingTimeout: 7000,
     socketTimeout: 12000,

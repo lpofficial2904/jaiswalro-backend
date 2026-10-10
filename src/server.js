@@ -159,4 +159,5 @@ createServer((request, response) => {
   handleRequest(request, response)
 }).listen(port, '0.0.0.0', () => {
   console.log(`Jaiswalro API listening on port ${port}`)
+  console.log('Email transport mode: Nodemailer SMTP with forced IPv4 socket')
 })
