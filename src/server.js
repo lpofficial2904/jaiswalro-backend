@@ -3,6 +3,7 @@ import { getEmailConfigStatus, handler as sendBookingEmail, verifyEmailConfig } 
 import sendWhatsApp from './functions/send-whatsapp.mjs'
 
 const port = Number(process.env.PORT || 3001)
+const normalizeOrigin = origin => origin.trim().replace(/\/+$/, '')
 const allowedOrigins = new Set([
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -11,8 +12,9 @@ const allowedOrigins = new Set([
   'https://jaiswalro.services',
   'https://www.jaiswalro.services',
   'https://admin.jaiswalro.services',
-  ...(process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean),
-])
+  'https://api.jaiswalro.services',
+  ...(process.env.CORS_ORIGINS || '').split(',').map(normalizeOrigin).filter(Boolean),
+].map(normalizeOrigin))
 const routes = new Map([
   ['/api/forms/email', sendBookingEmail],
   ['/api/forms/whatsapp', sendWhatsApp],
@@ -53,12 +55,14 @@ async function handleRequest(request, response) {
   const url = new URL(request.url || '/', 'http://localhost')
   const origin = request.headers.origin
 
-  if (origin && !allowedOrigins.has(origin)) {
+  const normalizedOrigin = origin ? normalizeOrigin(origin) : ''
+
+  if (origin && !allowedOrigins.has(normalizedOrigin)) {
     return sendJson(response, 403, { error: 'Origin is not allowed.' })
   }
 
   response.setHeader('Vary', 'Origin')
-  if (origin) response.setHeader('Access-Control-Allow-Origin', origin)
+  if (origin) response.setHeader('Access-Control-Allow-Origin', normalizedOrigin)
 
   if (url.pathname === '/health' || url.pathname === '/api/health') {
     if (request.method !== 'GET') {
