@@ -25,23 +25,23 @@ Password, not the normal Gmail login password. The server listens on port
 
 ## Email setup
 
-The email endpoint sends through Nodemailer SMTP. Example Gmail settings:
+The email endpoint sends through Nodemailer SMTP. For Render free services,
+use an SMTP relay that supports port `2525`. Example SendGrid settings:
 
 ```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=jaiswalroservices@gmail.com
-SMTP_PASS=your_gmail_app_password
-MAIL_FROM="Jaiswalro Website <jaiswalroservices@gmail.com>"
-MAIL_TO=jaiswalroservices@gmail.com
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=2525
+SMTP_SECURE=false
+SMTP_USER=apikey
+SMTP_PASS=your_sendgrid_api_key
+MAIL_FROM="Jaiswalro Website <your_verified_sender_email>"
+MAIL_TO=lpofficial2904@gmail.com
 ```
 
-If the backend host blocks outbound SMTP ports, Nodemailer cannot deliver from
-that host. Use a host that permits SMTP or an SMTP relay/port allowed by the
-host. On hosts where Gmail SMTP times out, use an SMTP relay that supports a
-non-blocked port such as `2525`, then set `SMTP_HOST`, `SMTP_PORT`,
-`SMTP_SECURE`, `SMTP_USER`, and `SMTP_PASS` from that relay.
+For SendGrid, `SMTP_USER` must be exactly `apikey`, and `SMTP_PASS` must be a
+SendGrid API key with Mail Send permission. `MAIL_FROM` must be verified in
+SendGrid sender authentication. If the backend host blocks outbound SMTP ports,
+Nodemailer cannot deliver through that blocked host/port.
 
 ## Endpoints
 

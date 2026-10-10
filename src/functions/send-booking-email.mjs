@@ -177,14 +177,40 @@ function getMissingEmailConfig() {
     .filter(key => !clean(process.env[key]))
 }
 
+function getEmailConfigError() {
+  const missingConfig = getMissingEmailConfig()
+  if (missingConfig.length) {
+    return `Missing email environment variables: ${missingConfig.join(', ')}`
+  }
+
+  const host = clean(process.env.SMTP_HOST).toLowerCase()
+  const user = clean(process.env.SMTP_USER)
+  const pass = clean(process.env.SMTP_PASS)
+  const from = clean(process.env.MAIL_FROM)
+
+  if (host === 'smtp.sendgrid.net' && user !== 'apikey') {
+    return 'SendGrid SMTP_USER must be exactly "apikey".'
+  }
+  if (/^(your_|YOUR_|SG\.xxxxx|your-sendgrid)/.test(pass)) {
+    return 'SMTP_PASS must be a real SMTP password or SendGrid API key.'
+  }
+  if (from.includes('verified_sender_email') || from.includes('your_verified_sender_email')) {
+    return 'MAIL_FROM must use a real verified sender email.'
+  }
+
+  return ''
+}
+
 export function getEmailConfigStatus() {
   const smtpConfigured = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'].every(key => clean(process.env[key]))
   const missingConfig = getMissingEmailConfig()
+  const configError = getEmailConfigError()
 
   return {
-    ok: missingConfig.length === 0,
+    ok: !configError,
     provider: smtpConfigured ? 'smtp' : 'none',
     missingConfig,
+    ...(configError ? { error: configError } : {}),
   }
 }
 
@@ -383,10 +409,10 @@ async function sendBookingEmail(event) {
       return json({ error: 'Please enter a valid name, 10-digit mobile number, and email address.' }, 400)
     }
 
-    const missingConfig = getMissingEmailConfig()
-    if (missingConfig.length) {
-      console.error(`Missing email environment variables: ${missingConfig.join(', ')}`)
-      return json({ error: 'Email service is not configured yet. Please call us.' }, 503)
+    const configError = getEmailConfigError()
+    if (configError) {
+      console.error(configError)
+      return json({ error: 'Email service is not configured correctly. Please call us.' }, 503)
     }
 
     const transporter = await getTransporter()

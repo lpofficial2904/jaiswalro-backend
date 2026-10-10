@@ -10,6 +10,7 @@ const allowedOrigins = new Set([
   'https://jaiswal-ro.vercel.app',
   'https://jaiswalro.services',
   'https://www.jaiswalro.services',
+  'https://admin.jaiswalro.services',
   ...(process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean),
 ])
 const routes = new Map([
