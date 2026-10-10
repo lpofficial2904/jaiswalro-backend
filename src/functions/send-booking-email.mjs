@@ -42,6 +42,8 @@ const escapeHtml = value => clean(value).replace(/[&<>"']/g, char => ({
 }[char]))
 
 const isValidEmail = value => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+const isRenderRuntime = () => ['RENDER', 'RENDER_SERVICE_ID', 'RENDER_EXTERNAL_HOSTNAME']
+  .some(key => clean(process.env[key]))
 const brand = {
   name: 'Jaiswalro Services',
   phone: '+91 9694727871',
@@ -314,6 +316,11 @@ async function sendBookingEmail(event) {
     }
 
     const resendApiKey = clean(process.env.RESEND_API_KEY)
+    if (!resendApiKey && isRenderRuntime()) {
+      console.error('Render deployment is configured to use SMTP. Set RESEND_API_KEY, MAIL_FROM, and MAIL_TO instead.')
+      return json({ error: 'Email service Render par Resend se configure karein. Please call us.' }, 503)
+    }
+
     const transporter = resendApiKey ? null : await getTransporter()
     const to = process.env.MAIL_TO
     const from = clean(process.env.MAIL_FROM) || `"Jaiswalro Website" <${process.env.SMTP_USER}>`
