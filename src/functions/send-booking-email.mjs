@@ -67,6 +67,13 @@ async function getTransporter() {
   })
 }
 
+function isConnectionTimeoutError(error) {
+  return error.code === 'ETIMEDOUT'
+    || error.name === 'TimeoutError'
+    || error.name === 'AbortError'
+    || (error.code === 'ESOCKET' && /ENETUNREACH|ETIMEDOUT|timeout/i.test(error.message || ''))
+}
+
 function getSmtpTimeoutMessage() {
   const host = clean(process.env.SMTP_HOST)
   const port = clean(process.env.SMTP_PORT || '587')
@@ -141,22 +148,22 @@ export async function verifyEmailConfig() {
   const status = getEmailConfigStatus()
   if (!status.ok) return status
 
-  const transporter = await getTransporter()
-  if (!transporter) {
-    return { ...status, ok: false, error: 'SMTP transporter could not be created.' }
-  }
-
+  let transporter
   try {
+    transporter = await getTransporter()
+    if (!transporter) {
+      return { ...status, ok: false, error: 'SMTP transporter could not be created.' }
+    }
     await verifyTransporterWithTimeout(transporter)
     transporter.close()
     return { ...status, ok: true, smtpReachable: true }
   } catch (error) {
-    transporter.close()
+    transporter?.close()
     return {
       ...status,
       ok: false,
       smtpReachable: false,
-      error: error.code === 'ETIMEDOUT'
+      error: isConnectionTimeoutError(error)
         ? getSmtpTimeoutMessage()
         : clean(error.message),
       code: error.code || error.name,
@@ -346,8 +353,6 @@ async function sendBookingEmail(event) {
       return json({ error: 'Email service is not configured yet. Please call us.' }, 503)
     }
 
-    await verifyTransporterWithTimeout(transporter)
-
     const rows = config.fields
       .map(([key, label]) => [label, clean(fields[key])])
       .filter(([, value]) => value)
@@ -369,7 +374,7 @@ async function sendBookingEmail(event) {
     return json({ ok: true, messageId: info.messageId })
   } catch (error) {
     console.error('send-booking-email error', error)
-    if (error.code === 'ETIMEDOUT' || error.name === 'TimeoutError' || error.name === 'AbortError') {
+    if (isConnectionTimeoutError(error)) {
       return json({ error: getSmtpTimeoutMessage() }, 504)
     }
     if (error.code === 'ENETUNREACH' || error.code === 'ECONNECTION' || error.code === 'ESOCKET' || error.code === 'EDNS') {
