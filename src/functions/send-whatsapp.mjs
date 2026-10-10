@@ -31,7 +31,7 @@ export default async (request) => {
     const name = clean(fields.name)
     const phone = clean(fields.phone || fields.mobile)
     if (name.length < 2 || !/^[6-9]\d{9}$/.test(phone)) {
-      return Response.json({ error: 'Valid name aur 10-digit mobile number required hai.' }, { status: 400 })
+      return Response.json({ error: 'Please enter a valid name and 10-digit mobile number.' }, { status: 400 })
     }
 
     const token = process.env.WHATSAPP_ACCESS_TOKEN
@@ -39,7 +39,7 @@ export default async (request) => {
     const recipient = (process.env.WHATSAPP_TO_NUMBER || '').replace(/\D/g, '')
     if (!token || !phoneNumberId || !recipient) {
       console.error('Missing WhatsApp environment variables')
-      return Response.json({ error: 'WhatsApp service abhi configure nahi hai. Please call us.' }, { status: 503 })
+      return Response.json({ error: 'WhatsApp service is not configured yet. Please call us.' }, { status: 503 })
     }
 
     const lines = config.fields
@@ -66,15 +66,15 @@ export default async (request) => {
     const whatsappResult = await whatsappResponse.json()
     if (!whatsappResponse.ok) {
       console.error('WhatsApp API error', JSON.stringify(whatsappResult))
-      return Response.json({ error: 'WhatsApp par request send nahi hui. Please dobara try karein.' }, { status: 502 })
+      return Response.json({ error: 'We could not send the WhatsApp request. Please try again.' }, { status: 502 })
     }
 
     return Response.json({ ok: true, messageId: whatsappResult.messages?.[0]?.id })
   } catch (error) {
     console.error('send-whatsapp error', error)
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      return Response.json({ error: 'WhatsApp server se response nahi mila. Please thodi der mein dobara try karein.' }, { status: 504 })
+      return Response.json({ error: 'WhatsApp server did not respond. Please try again later.' }, { status: 504 })
     }
-    return Response.json({ error: 'Request process nahi ho saki. Please dobara try karein.' }, { status: 500 })
+    return Response.json({ error: 'We could not process your request. Please try again.' }, { status: 500 })
   }
 }

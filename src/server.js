@@ -126,7 +126,7 @@ async function handleRequest(request, response) {
     if (!response.headersSent) {
       console.error('API request failed', error)
       return sendJson(response, error.statusCode || 500, {
-        error: error.statusCode === 413 ? error.message : 'Request process nahi ho saki. Please dobara try karein.',
+        error: error.statusCode === 413 ? error.message : 'We could not process your request. Please try again.',
       })
     }
     response.destroy(error)

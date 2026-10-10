@@ -306,19 +306,19 @@ async function sendBookingEmail(event) {
     const phone = clean(fields.phone || fields.mobile)
     const email = clean(fields.email)
     if (name.length < 2 || !/^[6-9]\d{9}$/.test(phone) || !isValidEmail(email)) {
-      return json({ error: 'Valid name, mobile number aur email details required hain.' }, 400)
+      return json({ error: 'Please enter a valid name, 10-digit mobile number, and email address.' }, 400)
     }
 
     const missingConfig = getMissingEmailConfig()
     if (missingConfig.length) {
       console.error(`Missing email environment variables: ${missingConfig.join(', ')}`)
-      return json({ error: 'Email service abhi configure nahi hai. Please call us.' }, 503)
+      return json({ error: 'Email service is not configured yet. Please call us.' }, 503)
     }
 
     const resendApiKey = clean(process.env.RESEND_API_KEY)
     if (!resendApiKey && isRenderRuntime()) {
       console.error('Render deployment is configured to use SMTP. Set RESEND_API_KEY, MAIL_FROM, and MAIL_TO instead.')
-      return json({ error: 'Email service Render par Resend se configure karein. Please call us.' }, 503)
+      return json({ error: 'Email service is temporarily unavailable. Please call us.' }, 503)
     }
 
     const transporter = resendApiKey ? null : await getTransporter()
@@ -326,7 +326,7 @@ async function sendBookingEmail(event) {
     const from = clean(process.env.MAIL_FROM) || `"Jaiswalro Website" <${process.env.SMTP_USER}>`
     if ((!resendApiKey && !transporter) || !to || !from) {
       console.error('Email delivery provider could not be configured')
-      return json({ error: 'Email service abhi configure nahi hai. Please call us.' }, 503)
+      return json({ error: 'Email service is not configured yet. Please call us.' }, 503)
     }
 
     const rows = config.fields
@@ -353,12 +353,12 @@ async function sendBookingEmail(event) {
   } catch (error) {
     console.error('send-booking-email error', error)
     if (error.code === 'ETIMEDOUT' || error.name === 'TimeoutError' || error.name === 'AbortError') {
-      return json({ error: 'Email server se response nahi mila. Please thodi der mein dobara try karein.' }, 504)
+      return json({ error: 'Email server did not respond. Please try again later.' }, 504)
     }
     if (error.code === 'ENETUNREACH' || error.code === 'ECONNECTION' || error.code === 'ESOCKET' || error.code === 'EDNS') {
-      return json({ error: 'Email server ka network connection available nahi hai. Please thodi der mein dobara try karein ya humein call karein.' }, 502)
+      return json({ error: 'Email server connection is unavailable. Please try again later or call us.' }, 502)
     }
-    return json({ error: 'Request process nahi ho saki. Please dobara try karein.' }, 500)
+    return json({ error: 'We could not process your request. Please try again.' }, 500)
   }
 }
 
