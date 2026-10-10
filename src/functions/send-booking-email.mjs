@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import { lookup } from 'node:dns'
 
 const jsonHeaders = {
   'Content-Type': 'application/json',
@@ -47,6 +48,10 @@ const brand = {
   address: '13/884, Deendayal Upadhyay Market, Malviya Nagar, Jaipur',
 }
 
+function lookupIpv4(hostname, options, callback) {
+  lookup(hostname, { ...options, family: 4 }, callback)
+}
+
 async function getTransporter() {
   const host = process.env.SMTP_HOST
   const port = Number(process.env.SMTP_PORT || 587)
@@ -61,6 +66,7 @@ async function getTransporter() {
     secure: process.env.SMTP_SECURE === 'true' || port === 465,
     auth: { user, pass },
     family: 4,
+    lookup: lookupIpv4,
     connectionTimeout: 7000,
     greetingTimeout: 7000,
     socketTimeout: 12000,
