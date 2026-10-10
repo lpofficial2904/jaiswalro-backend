@@ -412,7 +412,7 @@ async function sendBookingEmail(event) {
     const configError = getEmailConfigError()
     if (configError) {
       console.error(configError)
-      return json({ error: 'Email service is not configured correctly. Please call us.' }, 503)
+      return json({ error: configError }, 503)
     }
 
     const transporter = await getTransporter()
