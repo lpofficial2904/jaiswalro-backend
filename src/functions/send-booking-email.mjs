@@ -42,8 +42,6 @@ const escapeHtml = value => clean(value).replace(/[&<>"']/g, char => ({
 }[char]))
 
 const isValidEmail = value => !value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
-const isRenderRuntime = () => ['RENDER', 'RENDER_SERVICE_ID', 'RENDER_EXTERNAL_HOSTNAME']
-  .some(key => clean(process.env[key]))
 const brand = {
   name: 'Jaiswalro Services',
   phone: '+91 9694727871',
@@ -98,61 +96,21 @@ function sendMailWithTimeout(transporter, message) {
 }
 
 function getMissingEmailConfig() {
-  const required = process.env.RESEND_API_KEY
-    ? ['MAIL_FROM', 'MAIL_TO']
-    : ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_TO']
+  const required = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_TO']
 
   return required
     .filter(key => !clean(process.env[key]))
 }
 
 export function getEmailConfigStatus() {
-  const resendConfigured = Boolean(clean(process.env.RESEND_API_KEY))
   const smtpConfigured = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'].every(key => clean(process.env[key]))
   const missingConfig = getMissingEmailConfig()
 
   return {
-    ok: missingConfig.length === 0 && (!isRenderRuntime() || resendConfigured),
-    provider: resendConfigured ? 'resend' : smtpConfigured ? 'smtp' : 'none',
-    runtime: isRenderRuntime() ? 'render' : 'node',
+    ok: missingConfig.length === 0,
+    provider: smtpConfigured ? 'smtp' : 'none',
     missingConfig,
-    renderRequiresResend: isRenderRuntime() && !resendConfigured,
   }
-}
-
-async function sendResendEmail({ apiKey, from, to, replyTo, subject, text, html }) {
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from,
-      to: [to],
-      reply_to: replyTo,
-      subject,
-      text,
-      html,
-    }),
-    signal: AbortSignal.timeout(12000),
-  })
-
-  let result = {}
-  try {
-    result = await response.json()
-  } catch {
-    // Preserve a bounded error if the email provider returns a non-JSON response.
-  }
-
-  if (!response.ok) {
-    throw Object.assign(new Error(`Resend API returned ${response.status}: ${clean(result.message)}`), {
-      code: 'ERESEND',
-      statusCode: response.status,
-    })
-  }
-
-  return { messageId: result.id }
 }
 
 function getFormMeta(formType, fields) {
@@ -329,16 +287,10 @@ async function sendBookingEmail(event) {
       return json({ error: 'Email service is not configured yet. Please call us.' }, 503)
     }
 
-    const resendApiKey = clean(process.env.RESEND_API_KEY)
-    if (!resendApiKey && isRenderRuntime()) {
-      console.error('Render deployment is configured to use SMTP. Set RESEND_API_KEY, MAIL_FROM, and MAIL_TO instead.')
-      return json({ error: 'Email service is temporarily unavailable. Please call us.' }, 503)
-    }
-
-    const transporter = resendApiKey ? null : await getTransporter()
+    const transporter = await getTransporter()
     const to = process.env.MAIL_TO
     const from = clean(process.env.MAIL_FROM) || `"Jaiswalro Website" <${process.env.SMTP_USER}>`
-    if ((!resendApiKey && !transporter) || !to || !from) {
+    if (!transporter || !to || !from) {
       console.error('Email delivery provider could not be configured')
       return json({ error: 'Email service is not configured yet. Please call us.' }, 503)
     }
@@ -359,9 +311,7 @@ async function sendBookingEmail(event) {
       text,
       html,
     }
-    const info = resendApiKey
-      ? await sendResendEmail({ apiKey: resendApiKey, ...message })
-      : await sendMailWithTimeout(transporter, message)
+    const info = await sendMailWithTimeout(transporter, message)
 
     return json({ ok: true, messageId: info.messageId })
   } catch (error) {
