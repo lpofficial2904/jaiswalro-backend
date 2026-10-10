@@ -317,7 +317,7 @@ async function sendBookingEmail(event) {
   } catch (error) {
     console.error('send-booking-email error', error)
     if (error.code === 'ETIMEDOUT' || error.name === 'TimeoutError' || error.name === 'AbortError') {
-      return json({ error: 'Email server did not respond. Please try again later.' }, 504)
+      return json({ error: 'Email server connection timed out. Please check SMTP host, port, and hosting provider network access.' }, 504)
     }
     if (error.code === 'ENETUNREACH' || error.code === 'ECONNECTION' || error.code === 'ESOCKET' || error.code === 'EDNS') {
       return json({ error: 'Email server connection is unavailable. Please try again later or call us.' }, 502)

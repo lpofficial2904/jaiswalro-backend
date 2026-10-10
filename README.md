@@ -39,7 +39,9 @@ MAIL_TO=jaiswalroservices@gmail.com
 
 If the backend host blocks outbound SMTP ports, Nodemailer cannot deliver from
 that host. Use a host that permits SMTP or an SMTP relay/port allowed by the
-host.
+host. On hosts where Gmail SMTP times out, use an SMTP relay that supports a
+non-blocked port such as `2525`, then set `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_SECURE`, `SMTP_USER`, and `SMTP_PASS` from that relay.
 
 ## Endpoints
 
