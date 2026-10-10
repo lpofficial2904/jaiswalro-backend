@@ -75,6 +75,26 @@ async function getTransporter() {
   })
 }
 
+function verifyTransporterWithTimeout(transporter) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      transporter.close()
+      reject(Object.assign(new Error('SMTP verify timed out.'), { code: 'ETIMEDOUT' }))
+    }, 8000)
+
+    transporter.verify().then(
+      result => {
+        clearTimeout(timeout)
+        resolve(result)
+      },
+      error => {
+        clearTimeout(timeout)
+        reject(error)
+      },
+    )
+  })
+}
+
 function sendMailWithTimeout(transporter, message) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -110,6 +130,33 @@ export function getEmailConfigStatus() {
     ok: missingConfig.length === 0,
     provider: smtpConfigured ? 'smtp' : 'none',
     missingConfig,
+  }
+}
+
+export async function verifyEmailConfig() {
+  const status = getEmailConfigStatus()
+  if (!status.ok) return status
+
+  const transporter = await getTransporter()
+  if (!transporter) {
+    return { ...status, ok: false, error: 'SMTP transporter could not be created.' }
+  }
+
+  try {
+    await verifyTransporterWithTimeout(transporter)
+    transporter.close()
+    return { ...status, ok: true, smtpReachable: true }
+  } catch (error) {
+    transporter.close()
+    return {
+      ...status,
+      ok: false,
+      smtpReachable: false,
+      error: error.code === 'ETIMEDOUT'
+        ? 'SMTP connection timed out. The hosting provider cannot reach the configured SMTP host/port.'
+        : clean(error.message),
+      code: error.code || error.name,
+    }
   }
 }
 
@@ -294,6 +341,8 @@ async function sendBookingEmail(event) {
       console.error('Email delivery provider could not be configured')
       return json({ error: 'Email service is not configured yet. Please call us.' }, 503)
     }
+
+    await verifyTransporterWithTimeout(transporter)
 
     const rows = config.fields
       .map(([key, label]) => [label, clean(fields[key])])
