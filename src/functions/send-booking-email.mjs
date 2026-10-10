@@ -1,6 +1,4 @@
 import nodemailer from 'nodemailer'
-import { resolve4 } from 'node:dns/promises'
-import { isIP } from 'node:net'
 
 const jsonHeaders = {
   'Content-Type': 'application/json',
@@ -57,22 +55,28 @@ async function getTransporter() {
 
   if (!host || !user || !pass) return null
 
-  const isIpAddress = isIP(host) !== 0
-  const addresses = isIpAddress ? [host] : await resolve4(host)
-  if (!addresses.length) {
-    throw Object.assign(new Error(`No IPv4 address found for SMTP host ${host}.`), { code: 'EDNS' })
-  }
-
   return nodemailer.createTransport({
-    host: addresses[0],
+    host,
     port,
     secure: process.env.SMTP_SECURE === 'true' || port === 465,
     auth: { user, pass },
-    ...(isIpAddress ? {} : { tls: { servername: host } }),
+    family: 4,
     connectionTimeout: 7000,
     greetingTimeout: 7000,
     socketTimeout: 12000,
   })
+}
+
+function getSmtpTimeoutMessage() {
+  const host = clean(process.env.SMTP_HOST)
+  const port = clean(process.env.SMTP_PORT || '587')
+  const isRender = clean(process.env.RENDER).toLowerCase() === 'true'
+
+  if (isRender && ['25', '465', '587'].includes(port)) {
+    return `Email server connection timed out. Render free services block SMTP port ${port}; use a paid Render instance or an SMTP relay on an allowed port like 2525.`
+  }
+
+  return `Email server connection timed out. Please check SMTP host ${host || 'value'}, port ${port}, and hosting provider network access.`
 }
 
 function verifyTransporterWithTimeout(transporter) {
@@ -153,7 +157,7 @@ export async function verifyEmailConfig() {
       ok: false,
       smtpReachable: false,
       error: error.code === 'ETIMEDOUT'
-        ? 'SMTP connection timed out. The hosting provider cannot reach the configured SMTP host/port.'
+        ? getSmtpTimeoutMessage()
         : clean(error.message),
       code: error.code || error.name,
     }
@@ -366,7 +370,7 @@ async function sendBookingEmail(event) {
   } catch (error) {
     console.error('send-booking-email error', error)
     if (error.code === 'ETIMEDOUT' || error.name === 'TimeoutError' || error.name === 'AbortError') {
-      return json({ error: 'Email server connection timed out. Please check SMTP host, port, and hosting provider network access.' }, 504)
+      return json({ error: getSmtpTimeoutMessage() }, 504)
     }
     if (error.code === 'ENETUNREACH' || error.code === 'ECONNECTION' || error.code === 'ESOCKET' || error.code === 'EDNS') {
       return json({ error: 'Email server connection is unavailable. Please try again later or call us.' }, 502)
